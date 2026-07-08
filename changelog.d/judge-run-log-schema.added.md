@@ -1,0 +1,1 @@
+Provisional `axiom_encode.run_log.v1` judge-event dataclasses and a fail-closed cross-family judge client (Haiku default, Sonnet escalation on low confidence, cross-family guard, provision-window truncation, token logging). Every judge failure emits a visible `judge_error` event — fail-open is banned.

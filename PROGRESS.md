@@ -23,15 +23,16 @@ Feature release target: **0.2.1191** (pyproject + `__init__.__version__` + uv.lo
 - [x] Setup: worktree from origin/main; venv (.[dev,api], anthropic 0.116.0)
 - [x] Secrets: ANTHROPIC_API_KEY + OPENAI_API_KEY provisioned as repo secrets
 - [x] Coordination comment on #738
-- [ ] run_log.py (provisional schema)  ·  client.py (cross-family client)
-- [ ] Stage 1 statutory-fidelity referee + calibration harness (N>=30 replay)
-- [ ] Stage 2 grid-adequacy judge + follow-up hook
-- [ ] Stage 3 disposition referee (>=3 sampled-record arithmetic)
-- [ ] Stage 4 worklist pre-classifier + bulk-encode.yml wiring
-- [ ] Golden-regeneration drift check (weekly scheduled workflow)
-- [ ] Tests incl. negative (judge_error visible; preclassify never drops)
-- [ ] Version trio bump 0.2.1191 + changelog fragments
-- [ ] Calibration FP/FN numbers for PR body
+- [x] run_log.py (provisional schema)  ·  client.py (cross-family client)
+- [x] Stage 1 statutory-fidelity referee + calibration harness (N>=30 replay)
+- [x] Stage 2 grid-adequacy judge + follow-up hook
+- [x] Stage 3 disposition referee (>=3 sampled-record arithmetic)
+- [x] Stage 4 worklist pre-classifier + bulk-encode.yml wiring
+- [x] Golden-regeneration drift check (weekly scheduled workflow)
+- [x] Tests incl. negative (judge_error visible; preclassify never drops) — 31 pass
+- [x] Version trio bump 0.2.1191 (pyproject + __init__ + uv.lock) + changelog fragments
+- [ ] Calibration FP/FN numbers for PR body (real replay)
+- [ ] Push, draft PR, /cycle, CI green
 
 ## Spend-limit protocol
 If a spend limit is hit, stop cleanly, record remaining work here, and exit —

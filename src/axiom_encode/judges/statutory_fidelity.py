@@ -23,6 +23,7 @@ from .run_log import (
     JudgeEvent,
     JudgeStage,
     Verdict,
+    coerce_confidence,
     error_event,
 )
 
@@ -146,13 +147,28 @@ def run(
         for f in payload.get("findings", [])
         if isinstance(f, dict)
     ]
-    model_flagged = str(payload.get("verdict", "")).lower() == "flag"
-    verdict = Verdict.FLAG if (model_flagged or findings) else Verdict.PASS
-    confidence = payload.get("confidence")
+    raw_verdict = str(payload.get("verdict", "")).lower()
+    if raw_verdict not in ("pass", "flag"):
+        # An unrecognized (or absent) verdict is not a usable answer. Fail closed
+        # — never let it default to PASS (the fail-open the module bans). Only
+        # reachable on the prompt-guided fallback path; the json_schema enum
+        # constrains the happy path.
+        return error_event(
+            JudgeStage.STATUTORY_FIDELITY,
+            f"unrecognized verdict {raw_verdict!r} from judge",
+            error_type="unrecognized_verdict",
+            model=call.model,
+            generator_model=client.generator_model,
+            tokens=call.tokens,
+            escalated=call.escalated,
+            run_id=run_id,
+            subject_ref=subject,
+        )
+    verdict = Verdict.FLAG if (raw_verdict == "flag" or findings) else Verdict.PASS
     return JudgeEvent(
         stage=JudgeStage.STATUTORY_FIDELITY,
         verdict=verdict,
-        confidence=float(confidence) if confidence is not None else None,
+        confidence=coerce_confidence(payload.get("confidence")),
         advisory=True,
         findings=findings,
         model=call.model,

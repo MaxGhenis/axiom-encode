@@ -37,6 +37,7 @@ from axiom_encode.judges import (
     validate_event_dict,
 )
 from axiom_encode.judges.client import _extract_json
+from axiom_encode.judges.run_log import coerce_confidence
 
 # -- fakes ----------------------------------------------------------------
 
@@ -588,3 +589,113 @@ def test_calibration_load_cases_balanced(tmp_path):
     labels = [c.label for c in cases]
     assert labels.count("good") == 3
     assert labels.count("bad") == 3
+
+
+# -- review-fix regression tests ------------------------------------------
+
+
+def test_coerce_confidence_clamps_and_tolerates_non_numeric():
+    assert coerce_confidence("high") is None
+    assert coerce_confidence(None) is None
+    assert coerce_confidence(1.5) == 1.0
+    assert coerce_confidence(-0.2) == 0.0
+    assert coerce_confidence(0.5) == 0.5
+
+
+def test_fidelity_unrecognized_verdict_is_error_not_pass():
+    # A valid-JSON payload with an unrecognized verdict must fail closed, never
+    # default to PASS (the fail-open the module bans).
+    for bad in ("error", "garbage", ""):
+        ev = statutory_fidelity.run(
+            "prov",
+            "rule",
+            citation="c",
+            client=FakeClient(
+                _ok_call({"verdict": bad, "confidence": 0.9, "findings": []})
+            ),
+        )
+        assert ev.verdict == Verdict.ERROR, bad
+        assert ev.passed is False
+
+
+def test_fidelity_out_of_range_confidence_event_validates():
+    ev = statutory_fidelity.run(
+        "prov",
+        "rule",
+        citation="c",
+        client=FakeClient(
+            _ok_call({"verdict": "pass", "confidence": 1.5, "findings": []})
+        ),
+    )
+    d = ev.to_dict()
+    assert d["confidence"] == 1.0
+    assert validate_event_dict(d) == []
+
+
+def test_preclassify_non_numeric_confidence_does_not_crash_batch():
+    # A non-numeric arbiter confidence must not raise and take the whole batch
+    # down (never-drop invariant).
+    bad = FakeClient(
+        _ok_call(
+            {"classification": "self_contained", "confidence": "high", "reason": "x"}
+        )
+    )
+    r = preclassifier.classify(
+        {"citation": "z", "source_text": "An operative clause with no markers here."},
+        client=bad,
+    )
+    assert r.route == preclassifier.GENERATE
+    assert r.confidence == 0.0  # coerced from non-numeric
+
+
+def test_preclassify_empty_source_skips_never_generates():
+    r = preclassifier.classify({"citation": "e", "source_text": "   "})
+    assert r.route == preclassifier.SKIP
+    assert "no source text" in r.reason
+
+
+def test_generator_unknown_family_is_guarded():
+    client = JudgeClient(
+        model="claude-haiku-4-5-20251001",
+        generator_model="my-inhouse-wrapper",
+        api_key="x",
+    )
+    call = client.call(system="s", user_prompt="p", schema={})
+    assert call.error is not None
+    assert call.error.type == "cross_family_guard"
+
+
+def test_client_schema_error_on_missing_required_keys(monkeypatch):
+    # Valid JSON that omits a required key is an error, never a usable verdict.
+    install_fake_anthropic(monkeypatch, ['{"confidence": 0.9}'])
+    client = JudgeClient(model="claude-haiku-4-5-20251001", api_key="test")
+    call = client.call(
+        system="s",
+        user_prompt="p",
+        schema={"required": ["verdict", "confidence", "findings"]},
+    )
+    assert not call.ok
+    assert call.error.type == "schema_error"
+
+
+def test_client_constructor_failure_is_error_not_raise(monkeypatch):
+    mod = types.ModuleType("anthropic")
+    for name in (
+        "APIStatusError",
+        "RateLimitError",
+        "APIConnectionError",
+        "InternalServerError",
+        "BadRequestError",
+    ):
+        setattr(mod, name, type(name, (Exception,), {}))
+
+    class Anthropic:
+        def __init__(self, api_key=None):
+            raise RuntimeError("no network")
+
+    mod.Anthropic = Anthropic
+    monkeypatch.setitem(sys.modules, "anthropic", mod)
+    client = JudgeClient(model="claude-haiku-4-5-20251001", api_key="test")
+    call = client.call(system="s", user_prompt="p", schema={})
+    assert not call.ok
+    assert call.error.type == "client_init_error"

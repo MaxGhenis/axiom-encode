@@ -29,10 +29,16 @@ Feature release target: **0.2.1191** (pyproject + `__init__.__version__` + uv.lo
 - [x] Stage 3 disposition referee (>=3 sampled-record arithmetic)
 - [x] Stage 4 worklist pre-classifier + bulk-encode.yml wiring
 - [x] Golden-regeneration drift check (weekly scheduled workflow)
-- [x] Tests incl. negative (judge_error visible; preclassify never drops) — 31 pass
+- [x] Tests incl. negative (judge_error visible; preclassify never drops) — 39 pass
 - [x] Version trio bump 0.2.1191 (pyproject + __init__ + uv.lock) + changelog fragments
-- [ ] Calibration FP/FN numbers for PR body (real replay)
-- [ ] Push, draft PR, /cycle, CI green
+- [x] Calibration FP/FN numbers for PR body — N=30: FPR 66.7%, FNR 33.3%, 0 errors
+- [x] Push + draft PR #1088; CI green (lint + test)
+- [x] Independent review (opus subagent); 2 MAJOR + minors fixed in one commit
+  - MAJOR: fidelity fail-open on unrecognized/missing verdict -> now error_event
+  - MAJOR: non-numeric confidence crashed the preclassify batch -> coerce_confidence
+  - plus: schema-key + range-clamp + generator-unknown-family guard + client-init
+    wrap + defensive BadRequestError + drift label/error-issue/tempfile fixes
+- [ ] Re-poll CI on fix commit; mark #1088 ready; drive to merge
 
 ## Spend-limit protocol
 If a spend limit is hit, stop cleanly, record remaining work here, and exit —

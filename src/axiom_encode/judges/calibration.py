@@ -79,7 +79,6 @@ def load_cases(
         rng.shuffle(ids["good"])
         rng.shuffle(ids["bad"])
         half = max(n // 2, 1)
-        selected = ids["good"][:half] + ids["bad"][:half]
 
         cases: list[CalibrationCase] = []
         for label, chosen in (("good", ids["good"][:half]), ("bad", ids["bad"][:half])):
@@ -100,7 +99,6 @@ def load_cases(
                         rulespec_content=row["rulespec_content"],
                     )
                 )
-        del selected
         return cases
     finally:
         conn.close()

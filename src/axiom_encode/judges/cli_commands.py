@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -166,8 +167,14 @@ def cmd_preclassify(args: argparse.Namespace) -> int:
             print(
                 f"  [{r.route:8s}] {r.classification.value:15s} {r.entry_ref}: {r.reason}"
             )
-    # Advisory pre-step: never fails the workflow; the entries are routed, not dropped.
-    assert len(results) == len(entries), "pre-classifier dropped an entry"
+    # Advisory pre-step: never fails the workflow; the entries are routed, not
+    # dropped. Enforce that invariant with a hard check (not an assert, which -O
+    # would strip).
+    if len(results) != len(entries):
+        raise RuntimeError(
+            f"pre-classifier returned {len(results)} results for "
+            f"{len(entries)} entries; entries must never be dropped"
+        )
     return 0
 
 
@@ -253,7 +260,7 @@ def cmd_drift_check(args: argparse.Namespace) -> int:
 
     report = drift.run_drift_check(modules, regenerate, k=args.k, seed=args.seed)
     created = []
-    if args.create_issues and report.drifted:
+    if args.create_issues and (report.drifted or report.errors):
         created = _create_drift_issues(report, args.repo)
 
     if args.json:
@@ -347,34 +354,71 @@ def _subprocess_regenerate(template: str, module: str, merged: str) -> str:
 def _create_drift_issues(report, repo: str) -> list[str]:
     from . import drift
 
+    # Ensure the label exists so `gh issue create --label drift` doesn't fail on
+    # a fresh repo. Best-effort and idempotent.
+    subprocess.run(
+        [
+            "gh",
+            "label",
+            "create",
+            "drift",
+            "-R",
+            repo,
+            "--color",
+            "B60205",
+            "--description",
+            "Golden-regeneration drift",
+            "--force",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    # File an issue for every drifted module AND every regeneration error — a
+    # regeneration error is the least-visible outcome otherwise, and the drift
+    # check's whole point is that failures are never silent.
+    items = [
+        (r, drift.drift_issue_body(r), f"drift: {r.module}") for r in report.drifted
+    ]
+    items += [
+        (
+            r,
+            f"Golden regeneration could not check `{r.module}`:\n\n> {r.error}\n",
+            f"regeneration error: {r.module}",
+        )
+        for r in report.errors
+    ]
+
     created: list[str] = []
-    for result in report.drifted:
-        body = drift.drift_issue_body(result)
+    for _result, body, title in items:
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
             fh.write(body)
             body_path = fh.name
-        proc = subprocess.run(
-            [
-                "gh",
-                "issue",
-                "create",
-                "-R",
-                repo,
-                "--title",
-                f"Golden-regeneration drift: {result.module}",
-                "--label",
-                "drift",
-                "--body-file",
-                body_path,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode == 0:
-            created.append(proc.stdout.strip())
-        else:
-            print(
-                f"failed to create issue for {result.module}: {proc.stderr}",
-                file=sys.stderr,
+        try:
+            proc = subprocess.run(
+                [
+                    "gh",
+                    "issue",
+                    "create",
+                    "-R",
+                    repo,
+                    "--title",
+                    f"Golden-regeneration {title}",
+                    "--label",
+                    "drift",
+                    "--body-file",
+                    body_path,
+                ],
+                capture_output=True,
+                text=True,
             )
+            if proc.returncode == 0:
+                created.append(proc.stdout.strip())
+            else:
+                print(
+                    f"failed to create issue for {title}: {proc.stderr}",
+                    file=sys.stderr,
+                )
+        finally:
+            os.unlink(body_path)
     return created

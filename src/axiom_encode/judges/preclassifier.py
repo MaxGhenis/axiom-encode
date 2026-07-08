@@ -25,7 +25,14 @@ from enum import Enum
 from typing import Any, Optional
 
 from .client import JudgeClient, truncate_provision
-from .run_log import Finding, JudgeEvent, JudgeStage, TokenCounts, Verdict
+from .run_log import (
+    Finding,
+    JudgeEvent,
+    JudgeStage,
+    TokenCounts,
+    Verdict,
+    coerce_confidence,
+)
 
 
 class WorklistClass(str, Enum):
@@ -37,12 +44,6 @@ class WorklistClass(str, Enum):
 
 GENERATE = "generate"
 SKIP = "skip"
-
-_SKIP_CLASSES = {
-    WorklistClass.AMENDMENT_ACT,
-    WorklistClass.XREF_HEAVY,
-    WorklistClass.NEEDS_CONTAINER,
-}
 
 # Amendment-instruction markers (#1079). Deliberately excludes the past
 # participle "as amended", which merely describes existing law.
@@ -213,6 +214,11 @@ def classify(
     entry_ref = _entry_ref(entry)
     text = str(entry.get("source_text") or entry.get("text") or "")
 
+    # No provision text to classify: skip-with-reason rather than pay for an
+    # arbiter call on empty input or silently route it to generation.
+    if not text.strip():
+        return _skip_unclassified(entry_ref, client, reason="no source text provided")
+
     heur = heuristic_classify(text)
     if heur is not None:
         classification, confidence, reason = heur
@@ -284,7 +290,7 @@ def classify(
             model=call.model,
             escalated=call.escalated,
         )
-    confidence = float(payload.get("confidence", 0.0) or 0.0)
+    confidence = coerce_confidence(payload.get("confidence")) or 0.0
     reason = str(payload.get("reason", ""))
     route = GENERATE if classification == WorklistClass.SELF_CONTAINED else SKIP
     return PreclassifyResult(

@@ -20,6 +20,7 @@ from .run_log import (
     JudgeEvent,
     JudgeStage,
     Verdict,
+    coerce_confidence,
     error_event,
 )
 
@@ -142,7 +143,7 @@ def run(
     return JudgeEvent(
         stage=JudgeStage.GRID_ADEQUACY,
         verdict=verdict,
-        confidence=float(confidence) if confidence is not None else None,
+        confidence=coerce_confidence(confidence),
         advisory=True,
         findings=findings,
         model=call.model,

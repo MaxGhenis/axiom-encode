@@ -166,6 +166,12 @@ class JudgeClient:
 
         gen_family = model_family(self.generator_model)
         judge_family = model_family(model)
+        if gen_family == "unknown":
+            return (
+                f"generator model {self.generator_model!r} has an unrecognized "
+                "family; refusing to judge (cannot confirm the judge is "
+                "cross-family with it)"
+            )
         if judge_family == "unknown":
             return (
                 f"judge model {model!r} has an unrecognized family; refusing to "
@@ -284,7 +290,19 @@ class JudgeClient:
                 ),
             )
 
-        client = anthropic.Anthropic(api_key=self.api_key)
+        try:
+            client = anthropic.Anthropic(api_key=self.api_key)
+        except Exception as exc:  # noqa: BLE001 - never raise for an operational failure
+            return JudgeCall(
+                payload=None,
+                model=model,
+                escalated=False,
+                tokens=TokenCounts(),
+                error=JudgeError(
+                    type="client_init_error",
+                    message=f"could not construct Anthropic client: {exc}",
+                ),
+            )
         # Belt-and-suspenders: constrain the output to JSON *and* instruct the
         # model, so we degrade gracefully if a configured model lacks
         # output_config.format support.
@@ -328,6 +346,22 @@ class JudgeClient:
                     ),
                     raw_text=text,
                 )
+            missing = [k for k in schema.get("required", []) if k not in payload]
+            if missing:
+                # Valid JSON that omits required keys is still not a usable
+                # verdict — treat it as an error, never let it fall through to a
+                # stage that would read a missing verdict as a pass (fail-open).
+                return JudgeCall(
+                    payload=None,
+                    model=model,
+                    escalated=False,
+                    tokens=tokens,
+                    error=JudgeError(
+                        type="schema_error",
+                        message=f"judge response missing required keys: {missing}",
+                    ),
+                    raw_text=text,
+                )
             return JudgeCall(
                 payload=payload,
                 model=model,
@@ -365,6 +399,9 @@ class JudgeClient:
             system=system,
             messages=messages,
         )
+        # Bind defensively — an SDK without BadRequestError must not raise an
+        # AttributeError while handling an unrelated exception.
+        bad_request = getattr(anthropic_mod, "BadRequestError", ())
         try:
             response = client.messages.create(
                 output_config={"format": {"type": "json_schema", "schema": schema}},
@@ -373,7 +410,7 @@ class JudgeClient:
         except TypeError:
             # SDK too old for output_config; plain request + prompt-guided JSON.
             response = client.messages.create(**kwargs)
-        except anthropic_mod.BadRequestError:
+        except bad_request:
             # Model rejected the schema/format; retry plain.
             response = client.messages.create(**kwargs)
 

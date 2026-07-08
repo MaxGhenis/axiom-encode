@@ -75,13 +75,30 @@ FINDING_KINDS = frozenset(
 )
 
 
-def _round_conf(value: Optional[float]) -> Optional[float]:
+def coerce_confidence(value: Any) -> Optional[float]:
+    """Safely coerce a model-supplied confidence to a clamped [0,1] float.
+
+    Returns ``None`` for a missing or non-numeric value rather than raising — a
+    model that answers ``"high"`` must not crash a stage (and, in the
+    pre-classifier's batch path, take every other entry down with it). Values are
+    clamped to [0,1] so an emitted event always satisfies ``validate_event_dict``.
+    """
+
     if value is None:
         return None
     try:
-        return round(float(value), 4)
+        f = float(value)
     except (TypeError, ValueError):
         return None
+    if f < 0.0:
+        f = 0.0
+    elif f > 1.0:
+        f = 1.0
+    return round(f, 4)
+
+
+def _round_conf(value: Optional[float]) -> Optional[float]:
+    return coerce_confidence(value)
 
 
 @dataclass(frozen=True)

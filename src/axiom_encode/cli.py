@@ -2937,7 +2937,16 @@ def main():
         ),
     )
 
+    # Judge stages (maximum-traceability part 2) register their own subcommands
+    # from the judges package so this file's surface stays a thin hook.
+    from axiom_encode.judges import cli_commands as _judge_cli
+
+    _judge_cli.register_judge_subparsers(subparsers)
+
     args = parser.parse_args()
+
+    if args.command in _judge_cli.COMMANDS:
+        sys.exit(_judge_cli.dispatch(args))
 
     if args.command == "validate":
         cmd_validate(args)

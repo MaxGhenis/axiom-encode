@@ -80,7 +80,9 @@ _QUESTIONS = (
 )
 
 
-def build_prompt(provision_text: str, generated_rule: str, *, citation: str | None) -> str:
+def build_prompt(
+    provision_text: str, generated_rule: str, *, citation: str | None
+) -> str:
     header = f"Citation: {citation}\n\n" if citation else ""
     return (
         f"{header}Answer these fidelity questions about the artifact below.\n\n"

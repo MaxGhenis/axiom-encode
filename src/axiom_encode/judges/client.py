@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from axiom_encode.constants import (
@@ -289,8 +289,7 @@ class JudgeClient:
         # model, so we degrade gracefully if a configured model lacks
         # output_config.format support.
         json_system = (
-            system
-            + "\n\nRespond with a single JSON object only — no prose, no code "
+            system + "\n\nRespond with a single JSON object only — no prose, no code "
             "fences. It must conform to the provided schema."
         )
         messages = [{"role": "user", "content": user_prompt}]
@@ -342,8 +341,7 @@ class JudgeClient:
             model=model,
             escalated=False,
             tokens=TokenCounts(),
-            error=last_error
-            or JudgeError(type="unknown", message="judge call failed"),
+            error=last_error or JudgeError(type="unknown", message="judge call failed"),
         )
 
     def _invoke(
@@ -380,7 +378,9 @@ class JudgeClient:
             response = client.messages.create(**kwargs)
 
         text = "".join(
-            block.text for block in response.content if getattr(block, "type", "") == "text"
+            block.text
+            for block in response.content
+            if getattr(block, "type", "") == "text"
         )
         usage = getattr(response, "usage", None)
         tokens = TokenCounts(

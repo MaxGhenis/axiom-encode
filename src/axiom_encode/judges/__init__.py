@@ -22,7 +22,17 @@ Stages:
 
 from __future__ import annotations
 
+from . import (
+    calibration,
+    disposition,
+    drift,
+    grid_adequacy,
+    preclassifier,
+    statutory_fidelity,
+)
 from .client import JudgeCall, JudgeClient, model_family, truncate_provision
+from .disposition import Disposition
+from .preclassifier import PreclassifyResult, WorklistClass
 from .run_log import (
     EVENT_TYPE,
     FINDING_KINDS,
@@ -53,4 +63,15 @@ __all__ = [
     "JudgeCall",
     "model_family",
     "truncate_provision",
+    # stage modules
+    "statutory_fidelity",
+    "grid_adequacy",
+    "disposition",
+    "preclassifier",
+    "drift",
+    "calibration",
+    # stage types
+    "Disposition",
+    "PreclassifyResult",
+    "WorklistClass",
 ]
